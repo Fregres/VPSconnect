@@ -1,0 +1,15 @@
+[Unit]
+Description=VPSconnect monitoring agent
+After=network.target
+
+[Service]
+Type=simple
+User=vpsconnect
+Group=vpsconnect
+ExecStart=/usr/local/bin/vpsconnect
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
