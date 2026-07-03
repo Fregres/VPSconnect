@@ -16,6 +16,7 @@ import (
 )
 
 type Server struct {
+	token string
 }
 
 type MemoryInfo struct {
@@ -39,6 +40,24 @@ type Status struct {
 	Uptime      UptimeInfo `json:"uptime"`
 	CollectedAt time.Time  `json:"collected_at"`
 	Disk        DiskInfo   `json:"disk"`
+}
+
+func (s *Server) auth(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
+		token, ok := strings.CutPrefix(header, "Bearer ")
+		if !ok || token == "" {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if token != s.token {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func collectMemInfo() (MemoryInfo, error) {
@@ -146,7 +165,10 @@ func parseMemInfo(data []byte) (MemoryInfo, error) {
 
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/status", s.handleStatus)
+	statusHandler := http.HandlerFunc(s.handleStatus)
+	protectedStatusHandler := s.auth(statusHandler)
+
+	mux.Handle("GET /api/v1/status", protectedStatusHandler)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	return mux
 }
@@ -203,7 +225,13 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
-	srv := &Server{}
+	token, exists := os.LookupEnv("VPSCONNECT_TOKEN")
+
+	if !exists || strings.TrimSpace(token) == "" {
+		log.Fatal("VPSCONNECT_TOKEN is required")
+	}
+
+	srv := &Server{token: token}
 	const address = "127.0.0.1:6767"
 	server := &http.Server{Addr: address, Handler: srv.routes()}
 
