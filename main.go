@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -40,6 +42,16 @@ type Status struct {
 	Uptime      UptimeInfo `json:"uptime"`
 	CollectedAt time.Time  `json:"collected_at"`
 	Disk        DiskInfo   `json:"disk"`
+	CPU         CPUInfo    `json:"cpu"`
+}
+
+type CPUInfo struct {
+	UsagePercent float64 `json:"usage_percent"`
+}
+
+type cpuTimes struct {
+	total uint64
+	idle  uint64
 }
 
 func (s *Server) auth(h http.Handler) http.Handler {
@@ -58,6 +70,116 @@ func (s *Server) auth(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+func readCPUTimes() (cpuTimes, error) {
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return cpuTimes{}, fmt.Errorf("read /proc/stat: %w", err)
+	}
+
+	return parseCPUTimes(data)
+}
+
+func collectCPUInfo() (CPUInfo, error) {
+	first, err := readCPUTimes()
+	if err != nil {
+		return CPUInfo{}, fmt.Errorf("read first CPU sample: %w", err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	second, err := readCPUTimes()
+	if err != nil {
+		return CPUInfo{}, fmt.Errorf("read second CPU sample: %w", err)
+	}
+
+	if second.total < first.total {
+		return CPUInfo{}, errors.New("CPU total time decreased")
+	}
+
+	if second.idle < first.idle {
+		return CPUInfo{}, errors.New("CPU idle time decreased")
+	}
+
+	totalDelta := second.total - first.total
+	idleDelta := second.idle - first.idle
+
+	if totalDelta == 0 {
+		return CPUInfo{}, errors.New("CPU total delta is zero")
+	}
+
+	if idleDelta > totalDelta {
+		return CPUInfo{}, errors.New("CPU idle delta exceeds total delta")
+	}
+
+	workDelta := totalDelta - idleDelta
+
+	usagePercent := float64(workDelta) /
+		float64(totalDelta) *
+		100
+
+	return CPUInfo{
+		UsagePercent: usagePercent,
+	}, nil
+}
+
+func parseCPUTimes(data []byte) (cpuTimes, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !strings.HasPrefix(line, "cpu ") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 9 {
+			return cpuTimes{}, fmt.Errorf(
+				"invalid aggregate cpu line: %q",
+				line,
+			)
+		}
+
+		values := make([]uint64, 8)
+
+		for i := range values {
+			value, err := strconv.ParseUint(fields[i+1], 10, 64)
+			if err != nil {
+				return cpuTimes{}, fmt.Errorf(
+					"parse cpu field %d: %w",
+					i+1,
+					err,
+				)
+			}
+
+			values[i] = value
+		}
+
+		user := values[0]
+		nice := values[1]
+		system := values[2]
+		idle := values[3]
+		iowait := values[4]
+		irq := values[5]
+		softirq := values[6]
+		steal := values[7]
+
+		idleAll := idle + iowait
+		work := user + nice + system + irq + softirq + steal
+
+		return cpuTimes{
+			total: idleAll + work,
+			idle:  idleAll,
+		}, nil
+	}
+
+	if err := scanner.Err(); err != nil {
+		return cpuTimes{}, fmt.Errorf("scan /proc/stat: %w", err)
+	}
+
+	return cpuTimes{}, errors.New("aggregate cpu line not found")
 }
 
 func collectMemInfo() (MemoryInfo, error) {
@@ -188,11 +310,14 @@ func CollectStatus() (Status, error) {
 	if err != nil {
 		return Status{}, fmt.Errorf("collect disk: %w", err)
 	}
+
+	cpu, err := collectCPUInfo()
 	return Status{
 		Memory:      mem,
 		Uptime:      uptime,
 		CollectedAt: time.Now().UTC(),
 		Disk:        disk,
+		CPU:         cpu,
 	}, nil
 }
 
