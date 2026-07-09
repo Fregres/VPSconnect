@@ -47,7 +47,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status, err := CollectStatus()
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("collect status: %v", err)
+		http.Error(
+			w,
+			"failed to collect system status",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

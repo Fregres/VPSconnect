@@ -9,7 +9,7 @@ GET /healthz
 Авторизация не нужна.
 
 GET /api/v1/status
-Authorization: Bearer <token>
+`Authorization: Bearer <token>`
 
 ## Пример ответа
 
