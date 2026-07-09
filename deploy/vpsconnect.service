@@ -10,6 +10,7 @@ ExecStart=/usr/local/bin/vpsconnect
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
+EnvironmentFile=/etc/vpsconnect.env
 
 [Install]
 WantedBy=multi-user.target
