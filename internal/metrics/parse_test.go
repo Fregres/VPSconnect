@@ -1,4 +1,4 @@
-package main
+package metrics
 
 import (
 	"testing"
@@ -110,6 +110,7 @@ func TestParseCPUTimes(t *testing.T) {
 		}
 
 		if got != want {
+
 			t.Fatalf("parseCPUTimes() %+v, want %+v", got, want)
 		}
 	})

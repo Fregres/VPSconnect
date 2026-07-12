@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Fregres/VPSconnect/internal/httpapi"
 )
 
 func main() {
@@ -20,11 +22,12 @@ func main() {
 		log.Fatal("VPSCONNECT_TOKEN is required")
 	}
 
-	srv := &Server{token: token}
+	srv := httpapi.NewServer(token)
+
 	const address = "127.0.0.1:6767"
 	server := &http.Server{
 		Addr:              address,
-		Handler:           srv.routes(),
+		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

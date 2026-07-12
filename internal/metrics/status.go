@@ -1,10 +1,6 @@
-package main
+package metrics
 
 import "time"
-
-type Server struct {
-	token string
-}
 
 type MemoryInfo struct {
 	TotalBytes     uint64 `json:"total_bytes"`
