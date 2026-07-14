@@ -12,15 +12,29 @@ import (
 	"time"
 
 	"github.com/Fregres/VPSconnect/internal/httpapi"
+	"github.com/Fregres/VPSconnect/internal/storage/postgres"
 )
 
 func main() {
 
 	token, exists := os.LookupEnv("VPSCONNECT_TOKEN")
+	databaseURL := os.Getenv("DATABASE_URL")
 
+	if strings.TrimSpace(databaseURL) == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
 	if !exists || strings.TrimSpace(token) == "" {
 		log.Fatal("VPSCONNECT_TOKEN is required")
 	}
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer startupCancel()
+
+	storage, err := postgres.New(startupCtx, databaseURL)
+	if err != nil {
+		log.Fatalf("connect to PostgreSQL: %w", err)
+	}
+	defer storage.Close()
+	log.Println("Connected to PostgreSQL")
 
 	srv := httpapi.NewServer(token)
 
