@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Fregres/VPSconnect/internal/httpapi"
+	"github.com/Fregres/VPSconnect/internal/metrics"
 	"github.com/Fregres/VPSconnect/internal/storage/postgres"
 )
 
@@ -26,16 +27,27 @@ func main() {
 	if !exists || strings.TrimSpace(token) == "" {
 		log.Fatal("VPSCONNECT_TOKEN is required")
 	}
+
 	startupCtx, startupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer startupCancel()
 
 	storage, err := postgres.New(startupCtx, databaseURL)
 	if err != nil {
-		log.Fatalf("connect to PostgreSQL: %w", err)
+		log.Fatalf("connect to PostgreSQL: %v", err)
 	}
 	defer storage.Close()
-	log.Println("Connected to PostgreSQL")
 
+	log.Println("Connected to PostgreSQL")
+	status, err := metrics.CollectStatus()
+	if err != nil {
+		log.Fatalf("collect initial status: %v", err)
+	}
+
+	if err := storage.SaveMetric(startupCtx, 1, status); err != nil {
+		log.Fatalf("save initial metric: %v", err)
+	}
+
+	log.Println("Initial metric saved")
 	srv := httpapi.NewServer(token)
 
 	const address = "127.0.0.1:6767"
