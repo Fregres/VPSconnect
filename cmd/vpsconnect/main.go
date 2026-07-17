@@ -43,7 +43,7 @@ func main() {
 		log.Fatalf("collect initial status: %v", err)
 	}
 
-	if err := storage.SaveMetric(startupCtx, 1, status); err != nil {
+	if err := storage.SaveMetric(startupCtx, status); err != nil {
 		log.Fatalf("save initial metric: %v", err)
 	}
 
